@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 // vector type, represents coordinates in N dimensions
@@ -61,11 +62,6 @@ impl<const N: usize> Life<N> {
         self.cells.contains(pos)
     }
 
-    // kill the cell at the position
-    fn kill(&mut self, pos: &Vector<N>) {
-        self.cells.remove(pos);
-    }
-
     // create a live cell at the position
     fn create(&mut self, pos: Vector<N>) {
         self.cells.insert(pos);
@@ -78,9 +74,58 @@ impl<const N: usize> Life<N> {
             .filter(|&d| self.get(&vec_add(d, pos)))
             .count()
     }
+
+    // get all positions which have at least one live neighbor
+    fn empty_with_neighbors(&self) -> HashMap<Vector<N>, usize> {
+        let mut count = HashMap::new();
+
+        for c in self.cells.iter() {
+            let tmp: Vec<_> = self
+                .neighbors
+                .iter()
+                .map(|d| vec_add(d, c))
+                .filter(|pos| !count.contains_key(pos) && !self.cells.contains(pos))
+                .map(|pos| (pos, self.count_neighbors(&pos)))
+                .collect();
+
+            count.extend(tmp);
+        }
+
+        count
+    }
+
+    // perform a life cycle
+    fn cycle(&mut self) {
+        let ns = self.empty_with_neighbors();
+        let new = ns.iter().filter(|(_, &n)| n == 3).map(|(&pos, _)| pos);
+        let survive = self
+            .cells
+            .iter()
+            .map(|c| (c, self.count_neighbors(c)))
+            .filter(|(_, n)| *n == 2 || *n == 3)
+            .map(|(&pos, _)| pos)
+            .collect();
+
+        self.cells = survive;
+        self.cells.extend(new);
+    }
 }
 
-fn main() {}
+fn main() {
+    let mut life = Life::<7>::new();
+    life.create([0, 1, 0, 0, 0, 0, 0]);
+    life.create([0, 0, 0, 0, 0, 0, 0]);
+    life.create([0, -1, 0, 0, 0, 0, 0]);
+
+    for _ in 0..3 {
+        life.cycle();
+        println!("{}", life.cells.len());
+    }
+
+    let cells: Vec<_> = life.cells.iter().take(50).collect();
+
+    println!("{:?}", cells);
+}
 
 #[cfg(test)]
 mod tests {
@@ -103,5 +148,35 @@ mod tests {
         l.create([0, -1, -1]);
 
         assert_eq!(l.count_neighbors(&[0, 0, 0]), 2);
+    }
+
+    #[test]
+    fn rod() {
+        let mut life = Life::<2>::new();
+        life.create([0, 1]);
+        life.create([0, 0]);
+        life.create([0, -1]);
+
+        let cells = life.cells.clone();
+
+        life.cycle();
+        life.cycle();
+
+        assert_eq!(cells, life.cells);
+    }
+
+    #[test]
+    fn square() {
+        let mut life = Life::<2>::new();
+        life.create([0, 0]);
+        life.create([0, 1]);
+        life.create([1, 0]);
+        life.create([1, 1]);
+
+        let cells = life.cells.clone();
+
+        life.cycle();
+
+        assert_eq!(cells, life.cells);
     }
 }
